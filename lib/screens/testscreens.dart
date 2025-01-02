@@ -23,16 +23,17 @@ class TestScreen extends StatefulWidget {
 class _TestScreenState extends State<TestScreen> {
   late List<Question> _questions;
   int _currentQuestionIndex = 0;
+
   late List<dynamic> _selectedAnswers;
   late DateTime _startTime;
   List<bool> _answersCorrectness = [];
   late TextEditingController _shortAnswerController;
+  late List<bool> _questionCorrectStatus;
 
   @override
   void initState() {
     super.initState();
     _initializeTest();
-    print(widget.test.subject);
     _shortAnswerController = TextEditingController();
   }
 
@@ -51,6 +52,7 @@ class _TestScreenState extends State<TestScreen> {
     _questions = widget.test.questions;
     _selectedAnswers = List.filled(_questions.length, null);
     _answersCorrectness = List.filled(_questions.length, false);
+    _questionCorrectStatus = List.filled(_questions.length, false);
     _startTime = DateTime.now();
   }
 
@@ -124,76 +126,49 @@ class _TestScreenState extends State<TestScreen> {
   }
 
   Widget _buildTutorialContent(String? tutorial) {
-    if (widget.test.subject != null &&
-        ['toán', 'vật lý', 'hóa'].any((subject) =>
-            widget.test.subject!.toLowerCase().contains(subject))) {
-      // Nếu là môn học STEM, hiển thị TeXView
-      try {
-        return TeXView(
-          child: TeXViewDocument(
-            '''
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" />
-          </head>
-          <body>
-            ${tutorial}
-          </body>
-          </html>
-          ''' ??
-                'Không có hướng dẫn cho câu hỏi này.',
-            style: const TeXViewStyle(
-              padding: TeXViewPadding.all(10),
-            ),
+    try {
+      return TeXView(
+        child: TeXViewDocument(
+          tutorial ?? 'Không có hướng dẫn cho câu hỏi này.',
+          style: const TeXViewStyle(
+            padding: TeXViewPadding.all(10),
           ),
-        );
-      } catch (e) {
-        print('Lỗi hiển thị LaTeX: $e');
-        return const Text(
-          'Lỗi hiển thị nội dung',
-          style: TextStyle(color: Colors.red),
-        );
-      }
+        ),
+      );
+    } catch (e) {
+      print('Lỗi hiển thị LaTeX: $e');
+      return const Text(
+        'Lỗi hiển thị nội dung.',
+        style: TextStyle(color: Colors.red),
+      );
     }
-    return Text(
-      tutorial ?? 'Không có hướng dẫn cho câu hỏi này.',
-      style: const TextStyle(color: Colors.black),
-    );
   }
 
   Future<void> _submitQuiz() async {
     try {
-      int correctAnswers = 0;
-      int incorrectAnswers = 0;
-      int questionsAnswered = 0;
+      final int totalQuestions = _questions.length;
+      int correctAnswers =
+          _questionCorrectStatus.where((status) => status).length;
+      int incorrectAnswers = totalQuestions - correctAnswers;
 
-      for (int i = 0; i < _questions.length; i++) {
-        final question = _questions[i];
-        final selectedAnswer = _selectedAnswers[i];
-
-        if (selectedAnswer != null) {
-          questionsAnswered++;
-          if (_checkAnswer(question, selectedAnswer)) {
-            correctAnswers++;
-          } else {
-            incorrectAnswers++;
-          }
-        }
-      }
-
-      Duration timeSpent = DateTime.now().difference(_startTime);
+      print('Final correct answers: $correctAnswers');
+      print('Final incorrect answers: $incorrectAnswers');
 
       if (widget.user.id == null) {
         _showErrorDialog('Thiếu ID người dùng');
         return;
       }
 
+      Duration timeSpent = DateTime.now().difference(_startTime);
+
+      assert(correctAnswers + incorrectAnswers == totalQuestions,
+          'Total of correct and incorrect answers should equal total questions');
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => TestResultScreen(
-            totalQuestions: questionsAnswered,
+            totalQuestions: totalQuestions,
             correctAnswers: correctAnswers,
             incorrectAnswers: incorrectAnswers,
             user: widget.user,
@@ -203,6 +178,7 @@ class _TestScreenState extends State<TestScreen> {
         ),
       );
     } catch (e) {
+      print('Error in _submitQuiz: ${e.toString()}');
       _showErrorDialog('Lỗi khi nộp bài: ${e.toString()}');
     }
   }
@@ -210,29 +186,87 @@ class _TestScreenState extends State<TestScreen> {
   bool _checkAnswer(Question question, dynamic selectedAnswer) {
     if (selectedAnswer == null) return false;
 
+    bool isCorrect = false;
+
     switch (question.questionType) {
       case 'Chọn câu đúng':
-        return selectedAnswer is int &&
-            question.answers[selectedAnswer].isCorrect;
+        isCorrect =
+            selectedAnswer is int && question.answers[selectedAnswer].isCorrect;
+        break;
 
       case '4 câu đúng/sai':
-        if (selectedAnswer is! List<int>) return false;
-        return question.answers.asMap().entries.every((entry) =>
-            selectedAnswer.contains(entry.key) == entry.value.isCorrect);
+        if (selectedAnswer is List<int>) {
+          isCorrect = question.answers.asMap().entries.every((entry) =>
+              selectedAnswer.contains(entry.key) == entry.value.isCorrect);
+        }
+        break;
 
       case 'Đúng/Sai':
-        return selectedAnswer is int &&
-            question.answers[selectedAnswer].isCorrect;
+        isCorrect =
+            selectedAnswer is int && question.answers[selectedAnswer].isCorrect;
+        break;
 
       case 'Trắc nghiệm ngắn':
-        return selectedAnswer is String &&
-            question.answers[0].text.trim().toLowerCase() ==
-                selectedAnswer.trim().toLowerCase();
+        if (selectedAnswer is String) {
+          isCorrect = question.answers[0].text.trim().toLowerCase() ==
+              selectedAnswer.trim().toLowerCase();
+        }
+        break;
 
       default:
         _showErrorDialog(
             'Loại câu hỏi "${question.questionType}" không được hỗ trợ.');
-        return false;
+        break;
+    }
+
+    // Cập nhật trạng thái đúng/sai cho câu hỏi hiện tại
+    _questionCorrectStatus[_currentQuestionIndex] = isCorrect;
+
+    return isCorrect;
+  }
+
+  void _moveToNextQuestion() {
+    final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
+    final currentQuestion = _questions[_currentQuestionIndex];
+
+    if (currentQuestion.questionType == 'Trắc nghiệm ngắn') {
+      if (selectedAnswer != null && selectedAnswer.trim().isNotEmpty) {
+        final isCorrect = _checkAnswer(currentQuestion, selectedAnswer);
+        _showAnswerFeedbackDialog(isCorrect, currentQuestion.tutorial);
+
+        setState(() {
+          _selectedAnswers[_currentQuestionIndex] = null;
+          if (_currentQuestionIndex < _questions.length - 1) {
+            _currentQuestionIndex++;
+          } else {
+            _submitQuiz();
+          }
+        });
+        return;
+      }
+    } else {
+      if (selectedAnswer != null) {
+        final isCorrect = _checkAnswer(currentQuestion, selectedAnswer);
+        _showAnswerFeedbackDialog(isCorrect, currentQuestion.tutorial);
+
+        setState(() {
+          _selectedAnswers[_currentQuestionIndex] = null;
+          if (_currentQuestionIndex < _questions.length - 1) {
+            _currentQuestionIndex++;
+          } else {
+            _submitQuiz();
+          }
+        });
+        return;
+      }
+    }
+
+    if (_currentQuestionIndex < _questions.length - 1) {
+      setState(() {
+        _currentQuestionIndex++;
+      });
+    } else {
+      _submitQuiz();
     }
   }
 
@@ -270,79 +304,6 @@ class _TestScreenState extends State<TestScreen> {
     }
   }
 
-  void _moveToNextQuestion() {
-    final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
-    final currentQuestion = _questions[_currentQuestionIndex];
-
-    if (currentQuestion.questionType == 'Trắc nghiệm ngắn') {
-      // Chỉ kiểm tra và hiện feedback nếu có nhập đáp án
-      if (selectedAnswer != null && selectedAnswer.trim().isNotEmpty) {
-        final isCorrect = _checkAnswer(currentQuestion, selectedAnswer);
-        _showAnswerFeedbackDialog(isCorrect, currentQuestion.tutorial);
-
-        // Gộp hai setState lại thành một
-        setState(() {
-          _selectedAnswers[_currentQuestionIndex] = null;
-          if (_currentQuestionIndex < _questions.length - 1) {
-            _currentQuestionIndex++;
-          } else {
-            _submitQuiz();
-          }
-        });
-        return; // Thêm return để tránh thực hiện đoạn code bên dưới
-      }
-    } else {
-      // Xử lý các loại câu hỏi khác
-      if (selectedAnswer != null) {
-        final isCorrect = _checkAnswer(currentQuestion, selectedAnswer);
-        _showAnswerFeedbackDialog(isCorrect, currentQuestion.tutorial);
-
-        // Gộp hai setState lại thành một
-        setState(() {
-          _selectedAnswers[_currentQuestionIndex] = null;
-          if (_currentQuestionIndex < _questions.length - 1) {
-            _currentQuestionIndex++;
-          } else {
-            _submitQuiz();
-          }
-        });
-        return; // Thêm return để tránh thực hiện đoạn code bên dưới
-      }
-    }
-
-    // Chỉ tăng index nếu không có đáp án được chọn
-    if (_currentQuestionIndex < _questions.length - 1) {
-      setState(() {
-        _currentQuestionIndex++;
-      });
-    } else {
-      _submitQuiz();
-    }
-  }
-
-// Kiểm tra câu hỏi đã được trả lời chưa
-  bool _isQuestionAnswered() {
-    final currentQuestion = _questions[_currentQuestionIndex];
-    final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
-
-    if (selectedAnswer == null) return false;
-
-    switch (currentQuestion.questionType) {
-      case 'Chọn câu đúng':
-      case 'Đúng/Sai':
-        return selectedAnswer != null;
-
-      case '4 câu đúng/sai':
-        return selectedAnswer is List && selectedAnswer.isNotEmpty;
-
-      case 'Trắc nghiệm ngắn':
-        return selectedAnswer is String && selectedAnswer.trim().isNotEmpty;
-
-      default:
-        return false;
-    }
-  }
-
   Widget _buildQuestionWidget() {
     if (_questions.isEmpty) {
       return const Center(child: Text('Không có câu hỏi'));
@@ -367,44 +328,33 @@ class _TestScreenState extends State<TestScreen> {
   }
 
   Widget _renderAnswer(String answerText) {
-    bool isSTEMSubject = widget.test.subject != null &&
-        ['toán', 'vật lý', 'hóa'].any(
-            (subject) => widget.test.subject!.toLowerCase().contains(subject));
-
-    if (isSTEMSubject) {
-      try {
-        return TeXView(
-          child: TeXViewDocument(
-            '''
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" />
-              <script src="https://cdnjs.cloudflare.com/ajax/libs/katex/0.15.6/katex.min.js"></script>
-          </head>
-          <body>
-            ${answerText}
-          </body>
-          </html>
-          ''',
-            style: TeXViewStyle(
-              //textAlign: TeXViewTextAlign.center,
-              padding: TeXViewPadding.all(10),
-            ),
+    try {
+      return TeXView(
+        child: TeXViewDocument(
+          '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" />
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/katex/0.15.6/katex.min.js"></script>
+        </head>
+        <body>
+          ${answerText}
+        </body>
+        </html>
+        ''',
+          style: TeXViewStyle(
+            padding: TeXViewPadding.all(10),
           ),
-        );
-      } catch (e) {
-        print('Lỗi hiển thị LaTeX: $e');
-        return Text(
-          'Lỗi hiển thị nội dung',
-          style: TextStyle(color: Colors.red),
-        );
-      }
+        ),
+      );
+    } catch (e) {
+      print('Lỗi hiển thị LaTeX: $e');
+      return Text(
+        'Lỗi hiển thị nội dung',
+        style: TextStyle(color: Colors.red),
+      );
     }
-    return Text(
-      answerText,
-      style: const TextStyle(fontSize: 16),
-    );
   }
 
   Color _getAnswerColor(int index, bool isSelected) {

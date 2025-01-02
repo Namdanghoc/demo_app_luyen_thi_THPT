@@ -124,6 +124,7 @@ class _ListTestAdminScreenState extends State<ListTestAdminScreen> {
                             horizontal: 10, vertical: 5),
                         child: ListTile(
                           title: Text(
+                            maxLines: 5,
                             quiz.title,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),

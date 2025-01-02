@@ -1,3 +1,4 @@
+import 'package:app_luyen_de_thpt/firebase_options.dart';
 import 'package:app_luyen_de_thpt/screens/loginscreens.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +10,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 void main() async {
   // Đảm bảo widgets đã được khởi tạo
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Khởi tạo Firebase
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await dotenv.load(fileName: ".env");
 
   CloudinaryContext.cloudinary =

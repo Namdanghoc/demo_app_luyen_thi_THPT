@@ -425,7 +425,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(width: 15),
             _buildActionButton(
               icon: Icons.list_alt_rounded,
-              label: 'View Tests',
+              label: 'My Tests',
               onTap: () {
                 Navigator.push(
                   context,

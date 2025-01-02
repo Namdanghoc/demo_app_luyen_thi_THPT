@@ -7,7 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 class AppUser {
   String? id;
   String? email;
-  final bool isAdmin;
+  final bool isAdmin; // Giữ nguyên là boolean
   String? realname;
   String? namehighschool;
   String? group;
@@ -18,7 +18,7 @@ class AppUser {
   AppUser({
     this.id,
     this.email,
-    this.isAdmin = false,
+    this.isAdmin = false, // Mặc định là false
     this.realname,
     this.namehighschool,
     this.group,
@@ -70,13 +70,15 @@ class AuthService {
     }
   }
 
-  Future<AppUser?> registerUser(
-      {required String email,
-      required String password,
-      required String realname,
-      required String namehighschool,
-      required DateTime dateOfBirth,
-      bool isAdmin = false}) async {
+  Future<AppUser?> registerUser({
+    required String email,
+    required String password,
+    required String realname,
+    required String namehighschool,
+    required DateTime dateOfBirth,
+    bool isAdmin = false, // Thêm tham số isAdmin với giá trị mặc định là false
+    required String group,
+  }) async {
     try {
       if (!_isValidEmail(email)) {
         print('Invalid email format');
@@ -89,7 +91,9 @@ class AuthService {
       }
 
       UserCredential result = await _auth.createUserWithEmailAndPassword(
-          email: email, password: password);
+        email: email,
+        password: password,
+      );
 
       if (result.user == null) {
         print('User creation failed');
@@ -101,8 +105,9 @@ class AuthService {
         'realname': realname,
         'namehighschool': namehighschool,
         'dateofbirth': Timestamp.fromDate(dateOfBirth),
-        'isAdmin': isAdmin,
+        'isAdmin': isAdmin, // Lưu trạng thái admin
         'createdAt': FieldValue.serverTimestamp(),
+        'group': group,
       };
 
       await _firestore.collection('users').doc(result.user!.uid).set(userData);
@@ -120,36 +125,120 @@ class AuthService {
         case 'email-already-in-use':
           print('The email address is already in use.');
           AlertDiaLogThongBao(
-              tieuDeThongBao: 'Lỗi',
-              noiDungThongBao: 'Email đã được sử dụng!');
+              tieuDeThongBao: 'Lỗi', noiDungThongBao: 'Email đã được sử dụng!');
           break;
         case 'invalid-email':
           print('The email address is not valid.');
           AlertDiaLogThongBao(
-              tieuDeThongBao: 'Lỗi',
-              noiDungThongBao: 'Email không tồn tại!');
+              tieuDeThongBao: 'Lỗi', noiDungThongBao: 'Email không tồn tại!');
           break;
         case 'operation-not-allowed':
           print('Email/password accounts are not enabled.');
           AlertDiaLogThongBao(
-              tieuDeThongBao: 'Lỗi',
+              tieuDeThongBao: 'Lỗi',
               noiDungThongBao: 'Email/password accounts are not enabled!');
           break;
         case 'weak-password':
           print('The password is too weak.');
           AlertDiaLogThongBao(
-              tieuDeThongBao: 'Lỗi', noiDungThongBao: 'Mật khẩu quá yếu!');
+              tieuDeThongBao: 'Lỗi', noiDungThongBao: 'Mật khẩu quá yếu!');
           break;
         default:
           print('An undefined Error happened: ${e.code}');
           AlertDiaLogThongBao(
-              tieuDeThongBao: 'Lỗi',
+              tieuDeThongBao: 'Lỗi',
               noiDungThongBao: 'An undefined Error happened!');
       }
       return null;
     } catch (e) {
       print('Unexpected registration error: $e');
       return null;
+    }
+  }
+
+  Future<bool> deleteUser(String userId, String email, String password) async {
+    try {
+      User? user = _auth.currentUser;
+
+      // Xác thực lại người dùng
+      if (user != null) {
+        AuthCredential credential = EmailAuthProvider.credential(
+          email: email,
+          password: password,
+        );
+
+        await user.reauthenticateWithCredential(credential);
+      }
+
+      DocumentReference userRef = _firestore.collection('users').doc(userId);
+      DocumentSnapshot userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        throw Exception('Không tìm thấy người dùng');
+      }
+
+      try {
+        final avatarRef = storageRefUser.child('avatars/$userId.jpg');
+        await avatarRef.delete();
+      } catch (e) {
+        print('Không tìm thấy ảnh đại diện hoặc lỗi khi xóa: $e');
+      }
+
+      try {
+        QuerySnapshot userResults = await _firestore
+            .collection('test_results')
+            .where('userId', isEqualTo: userId)
+            .get();
+
+        for (QueryDocumentSnapshot result in userResults.docs) {
+          await result.reference.delete();
+        }
+        print('Đã xóa tất cả kết quả bài thi của người dùng');
+      } catch (e) {
+        print('Lỗi khi xóa kết quả bài thi: $e');
+      }
+
+      await userRef.delete();
+
+      if (user != null && user.uid == userId) {
+        await user.delete();
+      }
+
+      return true;
+    } catch (e) {
+      print('Lỗi khi xóa user: $e');
+      return false;
+    }
+  }
+
+  Future<bool> changeAdminStatus(String userId, bool isAdmin) async {
+    try {
+      // Lấy reference đến document của user
+      DocumentReference userRef = _firestore.collection('users').doc(userId);
+
+      // Kiểm tra xem user có tồn tại không
+      DocumentSnapshot userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        throw Exception('Không tìm thấy người dùng');
+      }
+
+      // Cập nhật trạng thái admin
+      await userRef.update({'isAdmin': isAdmin});
+
+      print(
+          'Đã thay đổi quyền admin thành ${isAdmin ? 'true' : 'false'} cho user $userId');
+      await AlertDiaLogThongBao(
+        tieuDeThongBao: 'Thành công',
+        noiDungThongBao: 'Đã cập nhật quyền người dùng',
+      );
+
+      return true;
+    } catch (e) {
+      print('Lỗi khi thay đổi quyền admin: $e');
+      await AlertDiaLogThongBao(
+        tieuDeThongBao: 'Lỗi',
+        noiDungThongBao: 'Không thể thay đổi quyền người dùng: ${e.toString()}',
+      );
+      return false;
     }
   }
 

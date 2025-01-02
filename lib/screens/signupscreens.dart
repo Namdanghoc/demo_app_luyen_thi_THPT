@@ -16,7 +16,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmPasswordController = TextEditingController();
   final _realnameController = TextEditingController();
   final _namehighschoolController = TextEditingController();
+  final _classController = TextEditingController();
   DateTime? _selectedDate;
+  String _role = "học sinh"; // Mặc định là học sinh
 
   void _presentDatePicker() async {
     final pickedDate = await showDatePicker(
@@ -39,19 +41,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final confirmPassword = _confirmPasswordController.text.trim();
     final realname = _realnameController.text.trim();
     final namehighschool = _namehighschoolController.text.trim();
+    final studentClass =
+        _role == "học sinh" ? _classController.text.trim() : "";
+    final isStudent = _role == "học sinh"; // Vai trò học sinh hoặc giáo viên
 
     if (email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty ||
         realname.isEmpty ||
         namehighschool.isEmpty ||
+        (_role == "học sinh" && studentClass.isEmpty) ||
         _selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Vui lòng điền đầy đủ thông tin!')),
       );
       return;
     }
-
     if (password != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Mật khẩu không khớp!')),
@@ -72,6 +77,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
         realname: realname,
         namehighschool: namehighschool,
         dateOfBirth: _selectedDate!,
+        isAdmin:
+            _role != "học sinh", // true nếu là giáo viên, false nếu là học sinh
+        group: studentClass,
       );
 
       Navigator.of(context).pop();
@@ -165,6 +173,40 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _role,
+                items: ["học sinh", "giáo viên"].map((role) {
+                  return DropdownMenuItem<String>(
+                    value: role,
+                    child: Text(role),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _role = value!;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Vai trò',
+                  prefixIcon: Icon(Icons.assignment_ind),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                ),
+              ),
+              SizedBox(height: 16),
+              if (_role == "học sinh")
+                TextField(
+                  controller: _classController,
+                  decoration: InputDecoration(
+                    labelText: 'Lớp',
+                    prefixIcon: Icon(Icons.class_),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                  ),
+                ),
+              SizedBox(height: 16),
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(
@@ -179,7 +221,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextField(
                 controller: _passwordController,
                 decoration: InputDecoration(
-                  hintText: 'Mật khẩu phải có ít nhất 6 kí tự',
+                  hintText: 'Mật khẩu phải có ít nhất 6 ký tự',
                   labelText: 'Mật khẩu',
                   prefixIcon: Icon(Icons.lock),
                   border: OutlineInputBorder(

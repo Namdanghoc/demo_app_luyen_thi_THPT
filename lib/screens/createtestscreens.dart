@@ -39,16 +39,16 @@ class _QuestionCreationScreenState extends State<QuestionCreationScreen> {
 
   final List<QuestionController> _questions = [];
   final List<Map<String, dynamic>> _subjects = [
-    {'name': 'Toán', 'id': 1},
-    {'name': 'Tin', 'id': 2},
-    {'name': 'Hóa', 'id': 3},
-    {'name': 'Sinh', 'id': 4},
-    {'name': 'Vật lý', 'id': 5},
-    {'name': 'Tiếng anh', 'id': 6},
+    {'name': 'Toán Học', 'id': 1},
+    {'name': 'Tin Học', 'id': 2},
+    {'name': 'Hóa Học', 'id': 3},
+    {'name': 'Sinh Học', 'id': 4},
+    {'name': 'Vật Lý', 'id': 5},
+    {'name': 'Tiếng Anh', 'id': 6},
     {'name': 'Lịch sử', 'id': 7},
-    {'name': 'Địa lý', 'id': 8},
+    {'name': 'Địa Lý', 'id': 8},
     {'name': 'Công nghệ', 'id': 9},
-    {'name': 'Kinh tế pháp luật', 'id': 10},
+    {'name': 'Kinh Tế Pháp Luật', 'id': 10},
   ];
 
   String? _selectedSubject;
